@@ -1,3 +1,5 @@
+**IMPORTANT:** If you are viewing this on GitHub, you are viewing a mirror of the [GitLab project](https://gitlab.com/ekristen/gitlab-release).
+
 # GitLab Release
 
 This is a simple bash script designed to run in GitLab CI when tags are pushed to a project to create a release if it does not exist and upload files against the release.
