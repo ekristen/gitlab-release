@@ -1,0 +1,91 @@
+#!/usr/bin/env sh
+
+set -e
+
+if [ "x${DEBUG}" != "x" ]; then
+  set -x
+fi
+
+if [ "x`which curl`" == "x" ]; then
+  echo "curl is required"
+  exit 1
+fi
+
+if [ "x`which jq`" == "x" ]; then
+  echo "[ERROR] jq is required"
+  exit 2
+fi
+
+if [ "x`which jo`" == "x" ]; then
+  echo "[ERROR] jo is required"
+  exit 3
+fi
+
+if [ "x${GR_TOKEN}" == "x" ]; then
+  echo "[ERROR] GR_TOKEN env var is required"
+  exit 4
+fi
+
+if [ "x${CI_PROJECT_ID}" == "x" ]; then
+  echo "[ERROR] CI_PROJECT_ID env var missing and it is required"
+  exit 5
+fi
+
+if [ "x${CI_PROJECT_PATH}" == "x" ]; then
+  echo "[ERROR] CI_PROJECT_PATH env var is missing and it is required"
+  exit 6
+fi
+
+if [ "x${CI_COMMIT_TAG}" == "x" ]; then
+  echo "[ERROR] CI_COMMIT_TAG env var missing and it is required"
+  exit 7
+fi
+
+GR_BASE_URL=${GR_BASE_URL:="https://gitlab.com"}
+GR_API=${GR_API:="https://gitlab.com/api/v4"}
+GR_TOKEN=${GR_TOKEN:=""}
+GR_RELEASE_PATH=${GR_RELEASE_PATH:="release"}
+
+CURL_OPTS=""
+
+if [ "x${DEBUG}" == "x" ]; then
+  CURL_OPTS="-s "
+fi
+
+check_release () {
+  echo "[INFO] Checking for Existing Release for Tag ${CI_COMMIT_TAG}"
+  curl $CURL_OPTS --fail --header "PRIVATE-TOKEN: ${GR_TOKEN}" "${GR_API}/projects/${CI_PROJECT_ID}/releases/${CI_COMMIT_TAG}" || return 1
+}
+
+create_release () {
+  echo "[INFO] Creating Release for Tag ${CI_COMMIT_TAG}"
+
+  PAYLOAD=$(jo id=${CI_PROJECT_ID} name=${CI_COMMIT_TAG} tag_name=${CI_COMMIT_TAG} description="Auto-Release for ${CI_COMMIT_TAG}")
+
+  curl $CURL_OPTS --fail --header "PRIVATE-TOKEN: ${GR_TOKEN}" --header 'Content-Type: application/json' -XPOST "${GR_API}/projects/${CI_PROJECT_ID}/releases" --data "${PAYLOAD}" || return 1
+}
+
+echo "[INFO] GitLab Release - Version: `cat VERSION`"
+
+check_release || create_release
+
+echo "\n"
+
+for FILE in `ls ${GR_RELEASE_PATH}`; do
+  LINK_ID=$(curl $CURLOPTS --header "PRIVATE-TOKEN: ${GR_TOKEN}" "${GR_API}/projects/${CI_PROJECT_ID}/releases/${CI_COMMIT_TAG}/assets/links" | jq -r --arg FILE "${FILE}" '.[] | select(.name == $FILE) | .id')
+
+  if [ "x${LINK_ID}" != "x" ]; then
+    echo "[INFO] Asset with same filename already exists, deleting existing asset link."
+  fi
+
+  echo "[INFO] Uploading ${GR_RELEASE_PATH}/${FILE} to GitLab Project"
+  ASSET_URL=$(curl $CURL_OPTS --fail --header "PRIVATE-TOKEN: ${GR_TOKEN}" -XPOST --form "file=@${GR_RELEASE_PATH}/${FILE}" "${GR_API}/projects/${CI_PROJECT_ID}/uploads" | jq -r .url)
+
+  if [ "x${LINK_ID}" != "x" ]; then
+    echo "[INFO] Updating Asset Link on Release"
+    curl $CURL_OPTS --fail --header "PRIVATE-TOKEN: ${GR_TOKEN}" -XPUT --data url="${GR_BASE_URL}/${CI_PROJECT_PATH}${ASSET_URL}" "${GR_API}/projects/${CI_PROJECT_ID}/releases/${CI_COMMIT_TAG}/assets/links/${LINK_ID}"
+  else
+    echo "[INFO] Attaching Asset to Release"
+    curl $CURL_OPTS --fail --header "PRIVATE-TOKEN: ${GR_TOKEN}" -XPOST --data name="${FILE}" --data url="${GR_BASE_URL}/${CI_PROJECT_PATH}${ASSET_URL}" "${GR_API}/projects/${CI_PROJECT_ID}/releases/${CI_COMMIT_TAG}/assets/links" | jq .
+  fi
+done
