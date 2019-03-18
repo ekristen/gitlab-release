@@ -22,11 +22,9 @@ This is designed to be run as a docker container with GitLab CI.
 publish:binaries:
   stage: publish
   image: ekristen/gitlab-release:latest
-  cache:
-    key: ${CI_COMMIT_REF_SLUG}
+  artifacts:
     paths:
       - release/
-    policy: pull
   variables:
     GIT_STRATEGY: none
   script:
