@@ -22,9 +22,8 @@ This is designed to be run as a docker container with GitLab CI.
 publish:binaries:
   stage: publish
   image: ekristen/gitlab-release:latest
-  artifacts:
-    paths:
-      - release/
+  dependencies:
+    - some-previous-job-that-has-artifacts
   variables:
     GIT_STRATEGY: none
   script:
