@@ -65,7 +65,7 @@ create_release () {
   curl $CURL_OPTS --fail --header "PRIVATE-TOKEN: ${GR_TOKEN}" --header 'Content-Type: application/json' -XPOST "${GR_API}/projects/${CI_PROJECT_ID}/releases" --data "${PAYLOAD}" || return 1
 }
 
-echo "[INFO] GitLab Release - Version: `cat VERSION`"
+echo "[INFO] GitLab Release"
 
 check_release || create_release
 
